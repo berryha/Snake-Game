@@ -24,7 +24,6 @@ import pgzrun
 import random
 import math
 from collections import deque
-import colorsys
 
 #增加无限模式
 infinite_mode = False
@@ -34,19 +33,13 @@ infinite_mode = False
 last_pathfind = 0  # 上次寻路的时间
 current_path = []  # 当前路径缓存
 snake_set = set()  # 蛇身位置集合，避免重复创建列表
-# 能量豆相关变量
-power_bean_pos = None  # 能量豆位置（None表示没有生成）
-power_bean_spawn_chance = 0.3  # 每次生成食物时，30%概率同时生成能量豆
 
 #实现贪吃蛇自动吃食物的功能
 def auto_eat_food():
-    """使用BFS寻路算法自动找到最短路径到食物或能量豆（优先能量豆）"""
+    """使用BFS寻路算法自动找到最短路径到食物"""
     global direction, next_direction, last_pathfind, current_path, snake_set
     
-    # 优先选择能量豆，其次食物
-    target_pos = power_bean_pos if power_bean_pos else food_pos
-    
-    if not target_pos or game_over or not game_started:
+    if not food or game_over or not game_started:
         return
     
     head = snake[0]
@@ -86,8 +79,8 @@ def auto_eat_food():
         current_pos, path = queue.popleft()
         current_x, current_y = current_pos
         
-        # 找到目标（食物或能量豆）
-        if current_pos == target_pos:
+        # 找到食物
+        if current_pos == food["pos"]:
             if len(path) >= 2:
                 # 提取从头到食物的路径（不包括头部）
                 current_path = path[1:]
@@ -132,6 +125,7 @@ MOVEMENT_INTERVAL = 8  # 每8帧移动一次，控制蛇的速度
 
 # 颜色定义
 BACKGROUND_COLOR = (20, 30, 20)
+# 蛇头颜色初始为绿色，会根据吃到的豆子颜色变化
 SNAKE_HEAD_COLOR = (0, 255, 0)
 # 蛇身颜色列表（红橙黄绿青蓝紫）
 SNAKE_BODY_COLORS = [
@@ -145,7 +139,18 @@ SNAKE_BODY_COLORS = [
 ]
 snake_color_index = 0  # 当前蛇身颜色索引
 SNAKE_BODY_COLOR = SNAKE_BODY_COLORS[snake_color_index]
-FOOD_COLOR = (220, 0, 0)
+
+# 食物类型定义
+FOOD_TYPES = {
+    "red": {"color": (220, 0, 0), "score": 10, "name": "红豆"},
+    "orange": {"color": (255, 165, 0), "score": 10, "name": "橙豆"},
+    "yellow": {"color": (255, 255, 0), "score": 10, "name": "黄豆"},
+    "green": {"color": (0, 255, 0), "score": 10, "name": "绿豆"},
+    "cyan": {"color": (0, 255, 255), "score": 10, "name": "青豆"},
+    "blue": {"color": (0, 0, 255), "score": 10, "name": "蓝豆"},
+    "purple": {"color": (128, 0, 255), "score": 10, "name": "紫豆"}
+}
+
 GRID_COLOR = (40, 50, 40)
 TEXT_COLOR = (220, 220, 220)
 GAME_OVER_COLOR = (220, 50, 50)
@@ -165,14 +170,14 @@ auto_mode = False  # 自动模式开关
 direction = RIGHT
 next_direction = RIGHT
 snake = []
-food_pos = None
+food = None  # 现在food是一个包含位置和类型的字典: {"pos": (x, y), "type": "red/yellow/purple"}
 game_started = False
 wingame = False
 
 
 def reset_game():
     """重置游戏"""
-    global snake, food_pos, direction, next_direction, score, game_over, game_started, current_path, snake_set, wingame, power_bean_pos
+    global snake, food, direction, next_direction, score, game_over, game_started, current_path, snake_set,wingame, SNAKE_HEAD_COLOR
     
     # 初始化蛇：头部在中间，加上3节身体
     center_x = GRID_WIDTH // 2
@@ -192,12 +197,15 @@ def reset_game():
     current_path = []  # 重置路径缓存
     snake_set = set()  # 重置蛇身集合
     wingame = False # 重置胜利标志
-    power_bean_pos = None  # 重置能量豆
+    
+    # 重置蛇头颜色为初始绿色
+    SNAKE_HEAD_COLOR = (0, 255, 0)
+    
     generate_food()
 
 def generate_food():
-    """在随机位置生成食物，并可能生成能量豆"""
-    global food_pos, current_path, power_bean_pos
+    """在随机位置生成食物"""
+    global food, current_path
     max_attempts = 100  # 最大尝试次数
     attempts = 0
     
@@ -209,6 +217,10 @@ def generate_food():
         
         # 确保食物不在蛇身上
         if food_pos not in snake:
+            # 随机选择食物类型，每种颜色豆子出现的概率是随机且相等的
+            food_types = list(FOOD_TYPES.keys())
+            food_type = random.choice(food_types)
+            food = {"pos": food_pos, "type": food_type}
             break
         attempts += 1
     else:
@@ -216,25 +228,12 @@ def generate_food():
         global game_over
         game_over = True
     
-    # 随机生成能量豆（30%概率）
-    if power_bean_pos is None and random.random() < power_bean_spawn_chance:
-        attempts = 0
-        while attempts < max_attempts:
-            x = random.randint(0, GRID_WIDTH - 1)
-            y = random.randint(0, GRID_HEIGHT - 1)
-            bean_pos = (x, y)
-            # 确保能量豆不在蛇身上，也不在食物位置上
-            if bean_pos not in snake and bean_pos != food_pos:
-                power_bean_pos = bean_pos
-                break
-            attempts += 1
-    
     # 清除缓存的路径，因为食物位置改变了
     current_path = []
 
 def move_snake():
     """移动蛇"""
-    global snake, game_over, score, high_score, power_bean_pos
+    global snake, game_over, score, high_score
     
     if game_over or not game_started:
         return
@@ -270,24 +269,23 @@ def move_snake():
     snake.insert(0, new_head)
     
     # 检查是否吃到食物
-    if new_head == food_pos:
-        score += 10
+    if new_head == food["pos"]:
+        food_type = food["type"]
+        score += FOOD_TYPES[food_type]["score"]
+        
+        # 将蛇头颜色更改为对应豆子的颜色
+        global SNAKE_HEAD_COLOR, snake_color_index
+        SNAKE_HEAD_COLOR = FOOD_TYPES[food_type]["color"]
+        
+        # 蛇身颜色自动切换到下一个颜色
+        snake_color_index = (snake_color_index + 1) % len(SNAKE_BODY_COLORS)
+        
         if score > high_score:
             high_score = score
         generate_food()
-        # 注意：吃到食物时不删除尾部，蛇就变长了（增加1节）
-    # 检查是否吃到能量豆（增加3节）
-    elif new_head == power_bean_pos:
-        score += 50  # 能量豆得分更高
-        if score > high_score:
-            high_score = score
-        power_bean_pos = None  # 消除能量豆
-        # 能量豆增加3节身体：不删除尾部，且额外保留2个节点
-        snake.append(snake[-1] if len(snake) > 1 else new_head)
-        snake.append(snake[-1] if len(snake) > 1 else new_head)
-        # 现在蛇会增长3节（头部+1 + 额外2节）
+        # 注意：吃到食物时不删除尾部，蛇就变长了
     else:
-        # 没吃到食物或能量豆，删除尾部
+        # 没吃到食物，删除尾部
         snake.pop()
 
 def update():
@@ -342,21 +340,10 @@ def draw_snake():
     for i, (screen_x, screen_y) in enumerate(snake_screen_coords):
         # 绘制蛇身
         if i == 0:  # 头部
-            # 计算与身体颜色相近但略有区别的头部颜色
-            base_color = SNAKE_BODY_COLORS[snake_color_index]
-            r_norm, g_norm, b_norm = (c / 255.0 for c in base_color)
-            h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
-            # 增大色差：稍微偏移色相，显著降低饱和度并增加亮度
-            h = (h + 0.06) % 1.0
-            s = max(0.0, s * 0.55)   # 更明显去色
-            v = min(1.0, v * 1.18 + 0.06)  # 更明显提亮
-            r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
-            head_color = (int(r2 * 255), int(g2 * 255), int(b2 * 255))
-
-            # 绘制头部矩形（使用与身体相近但不同的颜色）
+            # 绘制头部矩形
             screen.draw.filled_rect(
                 Rect((screen_x, screen_y), (CELL_SIZE, CELL_SIZE)),
-                head_color
+                SNAKE_HEAD_COLOR
             )
             # 绘制眼睛
             eye_size = CELL_SIZE // 5
@@ -406,71 +393,60 @@ def draw_snake():
                     eye_size, (0, 0, 0)
                 )
         else:  # 身体
-            # 绘制身体矩形，使用渐变颜色（从头部亮→尾部暗）
-            # 计算渐变进度：0 近头，1 在尾
-            body_progress = min(1.0, (i - 1) / max(1, len(snake) - 2))
-            # 从身体基础颜色逐渐变暗
-            r_norm, g_norm, b_norm = (c / 255.0 for c in SNAKE_BODY_COLORS[snake_color_index])
-            h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
-            v_grad = v * (1.0 - 0.55 * body_progress)  # 尾部暗度增加 55%
-            r_grad, g_grad, b_grad = colorsys.hsv_to_rgb(h, s, v_grad)
-            body_color = (int(r_grad * 255), int(g_grad * 255), int(b_grad * 255))
-
+            # 绘制身体矩形，使用渐变色
+            # 从当前snake_color_index开始，每一节身体使用下一个颜色
+            body_color_index = (snake_color_index + i - 1) % len(SNAKE_BODY_COLORS)
             screen.draw.filled_rect(
                 Rect((screen_x, screen_y), (CELL_SIZE, CELL_SIZE)),
-                body_color
+                SNAKE_BODY_COLORS[body_color_index]
             )
 
 def draw_food():
     """绘制食物"""
-    if food_pos:
-        x, y = food_pos
+    if food:
+        x, y = food["pos"]
         screen_x = x * CELL_SIZE
         screen_y = y * CELL_SIZE
+        food_type = food["type"]
         
-        # 绘制一个红色的圆形食物
+        # 获取食物类型对应的颜色
+        food_color = FOOD_TYPES[food_type]["color"]
+        
+        # 绘制一个圆形食物
         center_x = screen_x + CELL_SIZE // 2
         center_y = screen_y + CELL_SIZE // 2
         
         # 主圆
         screen.draw.filled_circle(
-            (center_x, center_y), CELL_SIZE // 2 - 2, FOOD_COLOR
+            (center_x, center_y), CELL_SIZE // 2 - 2, food_color
         )
         
-        # 高光效果
+        # 根据食物类型绘制不同的高光效果
+        if food_type == "red":
+            # 红色食物的高光
+            highlight_color = (255, 150, 150)
+        elif food_type == "orange":
+            # 橙色食物的高光
+            highlight_color = (255, 200, 150)
+        elif food_type == "yellow":
+            # 黄色食物的高光
+            highlight_color = (255, 255, 150)
+        elif food_type == "green":
+            # 绿色食物的高光
+            highlight_color = (150, 255, 150)
+        elif food_type == "cyan":
+            # 青色食物的高光
+            highlight_color = (150, 255, 255)
+        elif food_type == "blue":
+            # 蓝色食物的高光
+            highlight_color = (150, 150, 255)
+        else:  # purple
+            # 紫色食物的高光
+            highlight_color = (200, 150, 255)
+        
         screen.draw.filled_circle(
             (center_x - CELL_SIZE // 6, center_y - CELL_SIZE // 6),
-            CELL_SIZE // 6, (255, 150, 150)
-        )
-
-def draw_power_bean():
-    """绘制能量豆"""
-    if power_bean_pos:
-        x, y = power_bean_pos
-        screen_x = x * CELL_SIZE
-        screen_y = y * CELL_SIZE
-        center_x = screen_x + CELL_SIZE // 2
-        center_y = screen_y + CELL_SIZE // 2
-        
-        # 绘制黄色的菱形能量豆，比食物稍小但更醒目
-        bean_color = (255, 220, 0)  # 金黄色
-        bean_radius = CELL_SIZE // 3
-        
-        # 绘制一个旋转的方形（菱形）来区分于食物的圆形
-        for i in range(4):
-            angle = i * 90 + 45  # 菱形顶点
-            angle_rad = math.radians(angle)
-            x1 = center_x + bean_radius * math.cos(angle_rad)
-            y1 = center_y + bean_radius * math.sin(angle_rad)
-            angle2_rad = math.radians((i + 1) * 90 + 45)
-            x2 = center_x + bean_radius * math.cos(angle2_rad)
-            y2 = center_y + bean_radius * math.sin(angle2_rad)
-            screen.draw.line((int(x1), int(y1)), (int(x2), int(y2)), bean_color)
-        
-        # 填充菱形中心
-        screen.draw.filled_rect(
-            Rect((screen_x + 5, screen_y + 5), (CELL_SIZE - 10, CELL_SIZE - 10)),
-            bean_color
+            CELL_SIZE // 6, highlight_color
         )
 
 def draw_start_screen():
@@ -492,7 +468,7 @@ def draw_start_screen():
     )
     
     screen.draw.text(
-        "吃到红色食物可以增长身体",
+        "吃到红橙黄绿青蓝紫七种豆，蛇头会变色",
         center=(WIDTH // 2, HEIGHT // 2 + 20),
         fontsize=30,
         fontname="simhei.ttf",
@@ -580,9 +556,7 @@ def draw():
     # 绘制食物
     draw_food()
     
-    # 绘制能量豆
-    draw_power_bean()
-        # 绘制蛇
+    # 绘制蛇
     draw_snake()
     
     # 绘制分数
@@ -681,19 +655,18 @@ def on_key_down(key):
         print(f"INFINITE MODE set to {infinite_mode}")
         return
 
-    # 优先处理游戏结束状态，确保按R可重启（即使 game_started 被误置为 False）
-    if game_over:
-        if key == keys.R:
-            reset_game()
-        elif key == keys.ESCAPE:
-            game_started = False
-        return
-
     if not game_started:
         if key == keys.SPACE:
             reset_game()
         elif key == keys.ESCAPE:
             sys.exit()
+        return
+    
+    if game_over:
+        if key == keys.R:
+            reset_game()
+        elif key == keys.ESCAPE:
+            game_started = False
         return
     
     # 游戏进行中按键处理
@@ -714,7 +687,9 @@ def on_key_down(key):
     if key == keys.ESCAPE:
         # 返回主菜单
         game_started = False
-    # 注意：不要在游戏进行中按空格重置游戏（避免误触）。
+    elif key == keys.SPACE:
+        # 重新开始
+        reset_game()
 
 # 启动游戏
 pgzrun.go()
