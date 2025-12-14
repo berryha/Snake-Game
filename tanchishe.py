@@ -25,6 +25,10 @@ import random
 import math
 from collections import deque
 
+#增加无限模式
+infinite_mode = False
+
+
 # 自动模式相关变量
 last_pathfind = 0  # 上次寻路的时间
 current_path = []  # 当前路径缓存
@@ -117,12 +121,23 @@ CELL_SIZE = 20
 GRID_WIDTH = WIDTH // CELL_SIZE
 GRID_HEIGHT = HEIGHT // CELL_SIZE
 FPS = 10
-MOVEMENT_INTERVAL = 2  # 每8帧移动一次，控制蛇的速度
+MOVEMENT_INTERVAL = 8  # 每8帧移动一次，控制蛇的速度
 
 # 颜色定义
 BACKGROUND_COLOR = (20, 30, 20)
 SNAKE_HEAD_COLOR = (0, 255, 0)
-SNAKE_BODY_COLOR = (0, 180, 0)
+# 蛇身颜色列表（红橙黄绿青蓝紫）
+SNAKE_BODY_COLORS = [
+    (255, 0, 0),      # 红
+    (255, 165, 0),    # 橙
+    (255, 255, 0),    # 黄
+    (0, 255, 0),      # 绿
+    (0, 255, 255),    # 青
+    (0, 0, 255),      # 蓝
+    (128, 0, 255),    # 紫
+]
+snake_color_index = 0  # 当前蛇身颜色索引
+SNAKE_BODY_COLOR = SNAKE_BODY_COLORS[snake_color_index]
 FOOD_COLOR = (220, 0, 0)
 GRID_COLOR = (40, 50, 40)
 TEXT_COLOR = (220, 220, 220)
@@ -223,10 +238,12 @@ def move_snake():
     
     # 检查蛇的长度是否超过100，胜利条件
     if len(snake) >= 100:
-        global wingame
-        wingame = True
-        game_over = True
-        return
+        # 如果启用了无限模式，不触发胜利结束
+        if not infinite_mode:
+            global wingame
+            wingame = True
+            game_over = True
+            return
     
     # 添加新的头部
     snake.insert(0, new_head)
@@ -350,7 +367,7 @@ def draw_snake():
             # 绘制身体矩形
             screen.draw.filled_rect(
                 Rect((screen_x, screen_y), (CELL_SIZE, CELL_SIZE)),
-                SNAKE_BODY_COLOR
+                SNAKE_BODY_COLORS[snake_color_index]
             )
 
 def draw_food():
@@ -531,6 +548,26 @@ def draw():
         fontname="simhei.ttf",
         color=mode_color
     )
+    # 绘制无限模式状态
+    inf_text = "无限模式: 开启" if infinite_mode else "按B键启用无限模式"
+    inf_color = (255, 200, 0) if infinite_mode else TEXT_COLOR
+    screen.draw.text(
+        inf_text,
+        (10, 120),
+        fontsize=20,
+        fontname="simhei.ttf",
+        color=inf_color
+    )
+    # 绘制蛇身颜色指示
+    color_names = ["红", "橙", "黄", "绿", "青", "蓝", "紫"]
+    color_text = f"蛇身颜色: {color_names[snake_color_index]} (按C切换)"
+    screen.draw.text(
+        color_text,
+        (10, 150),
+        fontsize=20,
+        fontname="simhei.ttf",
+        color=SNAKE_BODY_COLORS[snake_color_index]
+    )
     
     # 游戏结束显示
     if game_over:
@@ -540,13 +577,27 @@ import sys
 
 def on_key_down(key):
     """处理按键按下"""
-    global next_direction, game_started, auto_mode
+    global next_direction, game_started, auto_mode, infinite_mode, wingame, snake_color_index
     
     # 只处理预期的按键
-    valid_keys = [keys.SPACE, keys.ESCAPE, keys.R, keys.LEFT, keys.RIGHT, keys.UP, keys.DOWN, keys.A]
+    valid_keys = [keys.SPACE, keys.ESCAPE, keys.R, keys.LEFT, keys.RIGHT, keys.UP, keys.DOWN, keys.A, keys.B, keys.C]
     if key not in valid_keys:
         return
     
+    # Allow toggling color at any time with C
+    if key == keys.C:
+        snake_color_index = (snake_color_index + 1) % len(SNAKE_BODY_COLORS)
+        print(f"Snake color changed to index {snake_color_index}")
+        return
+    
+    # Allow toggling infinite mode at any time with B
+    if key == keys.B:
+        infinite_mode = not infinite_mode
+        if infinite_mode:
+            wingame = False
+        print(f"INFINITE MODE set to {infinite_mode}")
+        return
+
     if not game_started:
         if key == keys.SPACE:
             reset_game()
