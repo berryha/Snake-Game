@@ -1,5 +1,11 @@
 # Snake Game (贪吃蛇游戏)
 
+A note about CI status (replace OWNER/REPO with your GitHub repo)
+
+```
+![Smoke Test](https://github.com/OWNER/REPO/actions/workflows/smoke.yml/badge.svg)
+```
+
 A classic arcade game built with Python and `pygame-zero` (`pgzrun`).
 
 ## Features
