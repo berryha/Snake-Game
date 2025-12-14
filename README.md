@@ -36,3 +36,32 @@ A classic arcade game built with Python and `pygame-zero` (`pgzrun`).
 ## Performance Optimizations
 - Path caching for BFS.
 - Snake body set caching to reduce CPU/memory usage.
+
+# PR Title
+chore(ci): add AI agent guidance, smoke tests, and CI workflow
+
+## Description
+Adds developer and AI agent productivity tools for the SnakeGame project:
+
+### Changes
+- **`.github/copilot-instructions.md`** — Comprehensive guide for AI coding agents covering architecture, caching patterns, developer workflows, and debugging strategies.
+- **`AGENT.md`** — Quick checklist for hands-on edits: run/debug workflow, safe refactoring patterns, and PR validation steps.
+- **`smoke_test.py`** — Headless syntax and AST validation script (no pgzrun import, safe for CI).
+- **`.github/workflows/smoke.yml`** — GitHub Actions workflow to run `smoke_test.py` on push and PRs.
+- **`README.md`** — Added CI badge template for workflow status visibility.
+
+### Why
+- AI agents (Copilot, Claude, Cursor) can now quickly understand project structure and conventions without multiple file reads.
+- Developers get fast pre-PR feedback via automated smoke tests.
+- CI catches basic syntax/structure issues early without requiring pgzero or X11 display.
+
+### Testing
+- `smoke_test.py` passes locally (syntax, required functions, font references all validated).
+- Workflow runs on Linux with Python 3.x; adjust if needed for other runtimes.
+
+### Usage
+After merge, replace `OWNER/REPO` in the README badge with your actual repository path. The workflow will run automatically on future pushes.
+
+**Follow-up items** (optional):
+- Add flake8/black linting to the workflow if desired.
+- Expand `AGENT.md` with example refactoring steps for specific game features.
