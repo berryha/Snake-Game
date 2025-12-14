@@ -681,18 +681,19 @@ def on_key_down(key):
         print(f"INFINITE MODE set to {infinite_mode}")
         return
 
-    if not game_started:
-        if key == keys.SPACE:
-            reset_game()
-        elif key == keys.ESCAPE:
-            sys.exit()
-        return
-    
+    # 优先处理游戏结束状态，确保按R可重启（即使 game_started 被误置为 False）
     if game_over:
         if key == keys.R:
             reset_game()
         elif key == keys.ESCAPE:
             game_started = False
+        return
+
+    if not game_started:
+        if key == keys.SPACE:
+            reset_game()
+        elif key == keys.ESCAPE:
+            sys.exit()
         return
     
     # 游戏进行中按键处理
@@ -713,9 +714,7 @@ def on_key_down(key):
     if key == keys.ESCAPE:
         # 返回主菜单
         game_started = False
-    elif key == keys.SPACE:
-        # 重新开始
-        reset_game()
+    # 注意：不要在游戏进行中按空格重置游戏（避免误触）。
 
 # 启动游戏
 pgzrun.go()
