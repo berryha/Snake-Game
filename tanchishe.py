@@ -24,6 +24,7 @@ import pgzrun
 import random
 import math
 from collections import deque
+import colorsys
 
 #增加无限模式
 infinite_mode = False
@@ -33,13 +34,19 @@ infinite_mode = False
 last_pathfind = 0  # 上次寻路的时间
 current_path = []  # 当前路径缓存
 snake_set = set()  # 蛇身位置集合，避免重复创建列表
+# 能量豆相关变量
+power_bean_pos = None  # 能量豆位置（None表示没有生成）
+power_bean_spawn_chance = 0.3  # 每次生成食物时，30%概率同时生成能量豆
 
 #实现贪吃蛇自动吃食物的功能
 def auto_eat_food():
-    """使用BFS寻路算法自动找到最短路径到食物"""
+    """使用BFS寻路算法自动找到最短路径到食物或能量豆（优先能量豆）"""
     global direction, next_direction, last_pathfind, current_path, snake_set
     
-    if not food_pos or game_over or not game_started:
+    # 优先选择能量豆，其次食物
+    target_pos = power_bean_pos if power_bean_pos else food_pos
+    
+    if not target_pos or game_over or not game_started:
         return
     
     head = snake[0]
@@ -79,8 +86,8 @@ def auto_eat_food():
         current_pos, path = queue.popleft()
         current_x, current_y = current_pos
         
-        # 找到食物
-        if current_pos == food_pos:
+        # 找到目标（食物或能量豆）
+        if current_pos == target_pos:
             if len(path) >= 2:
                 # 提取从头到食物的路径（不包括头部）
                 current_path = path[1:]
@@ -165,7 +172,7 @@ wingame = False
 
 def reset_game():
     """重置游戏"""
-    global snake, food_pos, direction, next_direction, score, game_over, game_started, current_path, snake_set,wingame
+    global snake, food_pos, direction, next_direction, score, game_over, game_started, current_path, snake_set, wingame, power_bean_pos
     
     # 初始化蛇：头部在中间，加上3节身体
     center_x = GRID_WIDTH // 2
@@ -185,11 +192,12 @@ def reset_game():
     current_path = []  # 重置路径缓存
     snake_set = set()  # 重置蛇身集合
     wingame = False # 重置胜利标志
+    power_bean_pos = None  # 重置能量豆
     generate_food()
 
 def generate_food():
-    """在随机位置生成食物"""
-    global food_pos, current_path
+    """在随机位置生成食物，并可能生成能量豆"""
+    global food_pos, current_path, power_bean_pos
     max_attempts = 100  # 最大尝试次数
     attempts = 0
     
@@ -208,12 +216,25 @@ def generate_food():
         global game_over
         game_over = True
     
+    # 随机生成能量豆（30%概率）
+    if power_bean_pos is None and random.random() < power_bean_spawn_chance:
+        attempts = 0
+        while attempts < max_attempts:
+            x = random.randint(0, GRID_WIDTH - 1)
+            y = random.randint(0, GRID_HEIGHT - 1)
+            bean_pos = (x, y)
+            # 确保能量豆不在蛇身上，也不在食物位置上
+            if bean_pos not in snake and bean_pos != food_pos:
+                power_bean_pos = bean_pos
+                break
+            attempts += 1
+    
     # 清除缓存的路径，因为食物位置改变了
     current_path = []
 
 def move_snake():
     """移动蛇"""
-    global snake, game_over, score, high_score
+    global snake, game_over, score, high_score, power_bean_pos
     
     if game_over or not game_started:
         return
@@ -254,9 +275,19 @@ def move_snake():
         if score > high_score:
             high_score = score
         generate_food()
-        # 注意：吃到食物时不删除尾部，蛇就变长了
+        # 注意：吃到食物时不删除尾部，蛇就变长了（增加1节）
+    # 检查是否吃到能量豆（增加3节）
+    elif new_head == power_bean_pos:
+        score += 50  # 能量豆得分更高
+        if score > high_score:
+            high_score = score
+        power_bean_pos = None  # 消除能量豆
+        # 能量豆增加3节身体：不删除尾部，且额外保留2个节点
+        snake.append(snake[-1] if len(snake) > 1 else new_head)
+        snake.append(snake[-1] if len(snake) > 1 else new_head)
+        # 现在蛇会增长3节（头部+1 + 额外2节）
     else:
-        # 没吃到食物，删除尾部
+        # 没吃到食物或能量豆，删除尾部
         snake.pop()
 
 def update():
@@ -311,10 +342,21 @@ def draw_snake():
     for i, (screen_x, screen_y) in enumerate(snake_screen_coords):
         # 绘制蛇身
         if i == 0:  # 头部
-            # 绘制头部矩形
+            # 计算与身体颜色相近但略有区别的头部颜色
+            base_color = SNAKE_BODY_COLORS[snake_color_index]
+            r_norm, g_norm, b_norm = (c / 255.0 for c in base_color)
+            h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+            # 增大色差：稍微偏移色相，显著降低饱和度并增加亮度
+            h = (h + 0.06) % 1.0
+            s = max(0.0, s * 0.55)   # 更明显去色
+            v = min(1.0, v * 1.18 + 0.06)  # 更明显提亮
+            r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
+            head_color = (int(r2 * 255), int(g2 * 255), int(b2 * 255))
+
+            # 绘制头部矩形（使用与身体相近但不同的颜色）
             screen.draw.filled_rect(
                 Rect((screen_x, screen_y), (CELL_SIZE, CELL_SIZE)),
-                SNAKE_HEAD_COLOR
+                head_color
             )
             # 绘制眼睛
             eye_size = CELL_SIZE // 5
@@ -364,10 +406,19 @@ def draw_snake():
                     eye_size, (0, 0, 0)
                 )
         else:  # 身体
-            # 绘制身体矩形
+            # 绘制身体矩形，使用渐变颜色（从头部亮→尾部暗）
+            # 计算渐变进度：0 近头，1 在尾
+            body_progress = min(1.0, (i - 1) / max(1, len(snake) - 2))
+            # 从身体基础颜色逐渐变暗
+            r_norm, g_norm, b_norm = (c / 255.0 for c in SNAKE_BODY_COLORS[snake_color_index])
+            h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+            v_grad = v * (1.0 - 0.55 * body_progress)  # 尾部暗度增加 55%
+            r_grad, g_grad, b_grad = colorsys.hsv_to_rgb(h, s, v_grad)
+            body_color = (int(r_grad * 255), int(g_grad * 255), int(b_grad * 255))
+
             screen.draw.filled_rect(
                 Rect((screen_x, screen_y), (CELL_SIZE, CELL_SIZE)),
-                SNAKE_BODY_COLORS[snake_color_index]
+                body_color
             )
 
 def draw_food():
@@ -390,6 +441,36 @@ def draw_food():
         screen.draw.filled_circle(
             (center_x - CELL_SIZE // 6, center_y - CELL_SIZE // 6),
             CELL_SIZE // 6, (255, 150, 150)
+        )
+
+def draw_power_bean():
+    """绘制能量豆"""
+    if power_bean_pos:
+        x, y = power_bean_pos
+        screen_x = x * CELL_SIZE
+        screen_y = y * CELL_SIZE
+        center_x = screen_x + CELL_SIZE // 2
+        center_y = screen_y + CELL_SIZE // 2
+        
+        # 绘制黄色的菱形能量豆，比食物稍小但更醒目
+        bean_color = (255, 220, 0)  # 金黄色
+        bean_radius = CELL_SIZE // 3
+        
+        # 绘制一个旋转的方形（菱形）来区分于食物的圆形
+        for i in range(4):
+            angle = i * 90 + 45  # 菱形顶点
+            angle_rad = math.radians(angle)
+            x1 = center_x + bean_radius * math.cos(angle_rad)
+            y1 = center_y + bean_radius * math.sin(angle_rad)
+            angle2_rad = math.radians((i + 1) * 90 + 45)
+            x2 = center_x + bean_radius * math.cos(angle2_rad)
+            y2 = center_y + bean_radius * math.sin(angle2_rad)
+            screen.draw.line((int(x1), int(y1)), (int(x2), int(y2)), bean_color)
+        
+        # 填充菱形中心
+        screen.draw.filled_rect(
+            Rect((screen_x + 5, screen_y + 5), (CELL_SIZE - 10, CELL_SIZE - 10)),
+            bean_color
         )
 
 def draw_start_screen():
@@ -499,7 +580,9 @@ def draw():
     # 绘制食物
     draw_food()
     
-    # 绘制蛇
+    # 绘制能量豆
+    draw_power_bean()
+        # 绘制蛇
     draw_snake()
     
     # 绘制分数
